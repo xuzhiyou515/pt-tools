@@ -1,0 +1,28 @@
+[Unit]
+Description=TVSubscribe - 电视剧种子自动下载器
+Documentation=https://github.com/xuzhiyou515/pt-tools/tvsubscribe
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=tvsubscribe
+Group=tvsubscribe
+WorkingDirectory=/opt/tvsubscribe
+ExecStart=/opt/tvsubscribe/tvsubscribe
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tvsubscribe
+
+# 安全设置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/tvsubscribe
+
+
+[Install]
+WantedBy=multi-user.target
