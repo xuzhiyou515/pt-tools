@@ -103,23 +103,29 @@ func buildSearchURL(info *TVInfo) string {
 
 // extractTorrentIDs 从HTML内容中提取种子ID
 func extractTorrentIDs(htmlContent string) []string {
-	var torrentIDs []string
-
 	if strings.TrimSpace(htmlContent) == "" {
-		return torrentIDs
+		return []string{}
 	}
 
 	// 解析HTML文档
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
-		return torrentIDs
+		return []string{}
 	}
+
+	// 使用map来去重
+	uniqueIDs := make(map[string]bool)
+	var torrentIDs []string
 
 	// 查找XPath对应的选择器: #outer > div > table，在其中查找种子链接
 	doc.Find("#outer > div > table a[href*='details.php?id']").Each(func(i int, s *goquery.Selection) {
 		if href, exists := s.Attr("href"); exists {
 			if torrentID := extractTorrentIDFromURL(href); torrentID != "" {
-				torrentIDs = append(torrentIDs, torrentID)
+				// 如果ID还没有出现过，则添加到结果中
+				if !uniqueIDs[torrentID] {
+					uniqueIDs[torrentID] = true
+					torrentIDs = append(torrentIDs, torrentID)
+				}
 			}
 		}
 	})

@@ -67,7 +67,9 @@ func addTorrentToTransmission(torrentPath, endpoint string) error {
 	if err != nil {
 		return fmt.Errorf("添加种子文件失败: %v", err)
 	}
-	fmt.Printf("添加%v种子文件成功\n",torrent.Name)
+	if torrent.Name != nil {
+		fmt.Printf("添加种子文件(%v)成功\n", *torrent.Name)
+	}
 	return nil
 }
 
