@@ -71,7 +71,7 @@ func TestAddTorrentToTransmission(t *testing.T) {
 	// 1. Transmission 服务器运行在 http://192.168.2.5:9091
 	// 2. 认证信息正确
 	// 3. 提供一个有效的种子文件路径
-	err := addTorrentToTransmission("1.torrent", "")
+	_, err := addTorrentToTransmission("1.torrent", "")
 	if err != nil {
 		t.Fatal(err)
 	}

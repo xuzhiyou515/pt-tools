@@ -20,6 +20,8 @@ type Config struct {
 	Cookie         string                `json:"cookie"`
 	Passkey        string                `json:"passkey"`
 	IntervalMinutes int                   `json:"interval_minutes"`
+	WeChatServer   string                `json:"wechat_server"`
+	WeChatToken    string                `json:"wechat_token"`
 	Subscribes     []tvsubscribe.TVInfo `json:"subscribes"`
 }
 
@@ -177,7 +179,7 @@ func processTVSubscribes(config *Config) {
 		log.Printf("找到 %d 个种子 (豆瓣ID: %s)", len(torrentIDs), tv.DouBanID)
 
 		// 下载种子
-		if err := tvsubscribe.DownloadTorrent(torrentIDs, config.Passkey, config.Endpoint); err != nil {
+		if err := tvsubscribe.DownloadTorrent(torrentIDs, config.Passkey, config.Endpoint, config.WeChatServer, config.WeChatToken); err != nil {
 			log.Printf("下载种子失败 (豆瓣ID: %s): %v", tv.DouBanID, err)
 		} else {
 			log.Printf("成功处理 %d 个种子 (豆瓣ID: %s)", len(torrentIDs), tv.DouBanID)
