@@ -16,13 +16,12 @@ import (
 )
 
 type Config struct {
-	Endpoint       string                `json:"endpoint"`
-	Cookie         string                `json:"cookie"`
-	Passkey        string                `json:"passkey"`
+	Endpoint        string                `json:"endpoint"`
+	Cookie          string                `json:"cookie"`
 	IntervalMinutes int                   `json:"interval_minutes"`
-	WeChatServer   string                `json:"wechat_server"`
-	WeChatToken    string                `json:"wechat_token"`
-	Subscribes     []tvsubscribe.TVInfo `json:"subscribes"`
+	WeChatServer    string                `json:"wechat_server"`
+	WeChatToken     string                `json:"wechat_token"`
+	Subscribes      []tvsubscribe.TVInfo `json:"subscribes"`
 }
 
 // ConfigManager 配置管理器，支持热重载
@@ -49,9 +48,6 @@ func loadConfig(configPath string) (*Config, error) {
 	// 验证必填字段
 	if config.Cookie == "" {
 		return nil, fmt.Errorf("配置文件中 cookie 不能为空")
-	}
-	if config.Passkey == "" {
-		return nil, fmt.Errorf("配置文件中 passkey 不能为空")
 	}
 	if config.IntervalMinutes <= 0 {
 		config.IntervalMinutes = 60 // 默认60分钟
@@ -165,24 +161,24 @@ func processTVSubscribes(config *Config) {
 		log.Printf("处理豆瓣ID: %s, 分辨率: %d", tv.DouBanID, tv.Resolution)
 
 		// 查询种子列表
-		torrentIDs, err := tvsubscribe.QueryTorrentList(config.Cookie, &tv)
+		torrentInfos, err := tvsubscribe.QueryTorrentList(config.Cookie, &tv)
 		if err != nil {
 			log.Printf("查询种子列表失败 (豆瓣ID: %s): %v", tv.DouBanID, err)
 			continue
 		}
 
-		if len(torrentIDs) == 0 {
+		if len(torrentInfos) == 0 {
 			log.Printf("未找到可下载的种子 (豆瓣ID: %s)", tv.DouBanID)
 			continue
 		}
 
-		log.Printf("找到 %d 个种子 (豆瓣ID: %s)", len(torrentIDs), tv.DouBanID)
+		log.Printf("找到 %d 个种子 (豆瓣ID: %s)", len(torrentInfos), tv.DouBanID)
 
 		// 下载种子
-		if err := tvsubscribe.DownloadTorrent(torrentIDs, config.Passkey, config.Endpoint, config.WeChatServer, config.WeChatToken); err != nil {
+		if err := tvsubscribe.DownloadTorrent(torrentInfos, config.Endpoint, config.WeChatServer, config.WeChatToken); err != nil {
 			log.Printf("下载种子失败 (豆瓣ID: %s): %v", tv.DouBanID, err)
 		} else {
-			log.Printf("成功处理 %d 个种子 (豆瓣ID: %s)", len(torrentIDs), tv.DouBanID)
+			log.Printf("成功处理 %d 个种子 (豆瓣ID: %s)", len(torrentInfos), tv.DouBanID)
 		}
 	}
 

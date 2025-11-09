@@ -14,8 +14,8 @@ import (
 	"github.com/hekmon/transmissionrpc/v3"
 )
 
-// 种子下载链接
-// 种子id 577692 passkey 123456 https://springsunday.net/download.php?id=577692&passkey=123456&https=1
+// 种子下载链接示例：
+// https://springsunday.net/download.php?id=577692&passkey=xxxxxx&https=1
 
 // WeChatMessageRequest 微信消息发送请求
 type WeChatMessageRequest struct {
@@ -70,10 +70,6 @@ func sendWeChatMessage(serverURL, token, title, content string) error {
 	return nil
 }
 
-// buildDownloadURL 构建种子下载链接
-func buildDownloadURL(id, passkey string) string {
-	return fmt.Sprintf("https://springsunday.net/download.php?id=%s&passkey=%s&https=1", id, passkey)
-}
 func downloadFile(url string, path string) error {
 	// 创建HTTP请求
 	resp, err := http.Get(url)
@@ -125,16 +121,30 @@ func addTorrentToTransmission(torrentPath, endpoint string) (*transmissionrpc.To
 	return &torrent, nil
 }
 
-// downloadATorrent 下载单个种子文件并添加到 Transmission
-func downloadATorrent(id, passkey, path, endpoint, wechatServer, wechatToken string) error {
+
+// downloadATorrentFromInfo 从 TorrentInfo 下载单个种子文件并添加到 Transmission
+func downloadATorrentFromInfo(torrentInfo *TorrentInfo, path, endpoint, wechatServer, wechatToken string) error {
+	// 直接使用 TorrentInfo 中的下载链接
+	downloadURL := torrentInfo.DownloadLink
+	if downloadURL == "" {
+		return fmt.Errorf("种子下载链接为空，种子ID: %s", torrentInfo.ID)
+	}
+
 	// 下载种子文件
-	err := downloadFile(buildDownloadURL(id, passkey), path)
+	err := downloadFile(downloadURL, path)
 	if err != nil {
 		// 删除可能已创建的不完整文件
 		os.Remove(path)
 		// 发送下载失败通知
+		infoMsg := fmt.Sprintf("种子ID: %s", torrentInfo.ID)
+		if torrentInfo.Info != "" {
+			infoMsg += fmt.Sprintf("\n种子信息: %s", torrentInfo.Info)
+		}
+		if torrentInfo.Volume != "" {
+			infoMsg += fmt.Sprintf("\n种子大小: %s", torrentInfo.Volume)
+		}
 		if sendErr := sendWeChatMessage(wechatServer, wechatToken,
-			"种子下载失败", fmt.Sprintf("种子ID: %s\n错误信息: %v", id, err)); sendErr != nil {
+			"种子下载失败", fmt.Sprintf("%s\n错误信息: %v", infoMsg, err)); sendErr != nil {
 			fmt.Printf("发送下载失败通知失败: %v\n", sendErr)
 		}
 		return fmt.Errorf("下载种子文件失败: %v", err)
@@ -146,16 +156,30 @@ func downloadATorrent(id, passkey, path, endpoint, wechatServer, wechatToken str
 		// 删除种子文件
 		os.Remove(path)
 		// 发送添加失败通知
+		infoMsg := fmt.Sprintf("种子ID: %s", torrentInfo.ID)
+		if torrentInfo.Info != "" {
+			infoMsg += fmt.Sprintf("\n种子信息: %s", torrentInfo.Info)
+		}
+		if torrentInfo.Volume != "" {
+			infoMsg += fmt.Sprintf("\n种子大小: %s", torrentInfo.Volume)
+		}
 		if sendErr := sendWeChatMessage(wechatServer, wechatToken,
-			"添加种子失败", fmt.Sprintf("种子ID: %s\n错误信息: %v", id, err)); sendErr != nil {
+			"添加种子失败", fmt.Sprintf("%s\n错误信息: %v", infoMsg, err)); sendErr != nil {
 			fmt.Printf("发送添加失败通知失败: %v\n", sendErr)
 		}
 		return fmt.Errorf("添加种子到 Transmission 失败: %v", err)
 	}
 
-	// 发送成功通知
+	// 发送成功通知，包含更丰富的信息
+	infoMsg := fmt.Sprintf("种子ID: %s", torrentInfo.ID)
+	if torrentInfo.Info != "" {
+		infoMsg += fmt.Sprintf("\n种子信息: %s", torrentInfo.Info)
+	}
+	if torrentInfo.Volume != "" {
+		infoMsg += fmt.Sprintf("\n种子大小: %s", torrentInfo.Volume)
+	}
 	if err := sendWeChatMessage(wechatServer, wechatToken,
-		"种子下载成功", fmt.Sprintf("种子名称: %s\n种子ID: %s\n已成功添加到 Transmission", *torrent.Name, id)); err != nil {
+		"种子下载成功", fmt.Sprintf("%s\n种子名称: %s\n已成功添加到 Transmission", infoMsg, *torrent.Name)); err != nil {
 		fmt.Printf("发送成功通知失败: %v\n", err)
 	}
 
@@ -163,22 +187,22 @@ func downloadATorrent(id, passkey, path, endpoint, wechatServer, wechatToken str
 }
 
 // DownloadTorrent 批量下载种子并添加到 Transmission
-func DownloadTorrent(ids []string, passkey, endpoint, wechatServer, wechatToken string) error {
+func DownloadTorrent(torrentInfos []TorrentInfo, endpoint, wechatServer, wechatToken string) error {
 	var lastError error
 
-	for i := range ids {
-		path := fmt.Sprintf("torrents/%s.torrent", ids[i])
+	for i := range torrentInfos {
+		path := fmt.Sprintf("torrents/%s.torrent", torrentInfos[i].ID)
 
 		// 检查文件是否已存在
 		if _, err := os.Stat(path); err == nil {
 			continue // 文件已存在，跳过
 		}
 
-		err := downloadATorrent(ids[i], passkey, path, endpoint, wechatServer, wechatToken)
+		err := downloadATorrentFromInfo(&torrentInfos[i], path, endpoint, wechatServer, wechatToken)
 		if err != nil {
 			lastError = err
 			// 记录错误但继续处理其他种子
-			fmt.Printf("下载种子 %s 失败: %v\n", ids[i], err)
+			fmt.Printf("下载种子 %s 失败: %v\n", torrentInfos[i].ID, err)
 		}
 	}
 

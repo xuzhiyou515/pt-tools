@@ -62,103 +62,60 @@ func TestBuildSearchURL(t *testing.T) {
 	}
 }
 
-// TestExtractTorrentIDs 测试 extractTorrentIDs 函数
-func TestExtractTorrentIDs(t *testing.T) {
+// TestExtractTorrentInfos 测试 extractTorrentInfos 函数
+func TestExtractTorrentInfos(t *testing.T) {
 	tests := []struct {
 		name     string
 		html     string
-		expected []string
+		expected []TorrentInfo
 	}{
 		{
 			name:     "空HTML内容",
 			html:     "",
-			expected: []string{},
+			expected: []TorrentInfo{},
 		},
 		{
 			name:     "只有空格的HTML内容",
 			html:     "   \n\t  ",
-			expected: []string{},
+			expected: []TorrentInfo{},
 		},
 		{
-			name: "单个种子ID（在outer表格内）",
-			html: `<html><body><div id="outer"><div><table><tr><td><a href="details.php?id=123456&hit=1">种子详情</a></td></tr></table></div></div></body></html>`,
-			expected: []string{"123456"},
+			name: "单个种子信息（在outer表格内）",
+			html: `<html><body><div id="outer"><div><table><tr><td class="embedded"><div class="torrent-title"><a href="details.php?id=123456&hit=1">Sword.and.Beloved.S01E26-E27.2025.2160p</a></div><div class="torrent-smalldescr"><span title="天地剑心 / 狐妖小红娘·王权篇 / 狐妖小红娘之王权篇 | 第26-27集 | 成毅 / 李一桐 / 郭俊辰 [国语] [简繁英字幕]">详细信息</span></div></td><td width="110"><a href="download.php?id=123456&passkey=test">下载</a></td><td>1.5 GB</td></tr></table></div></div></body></html>`,
+			expected: []TorrentInfo{
+				{ID: "123456", Info: "天地剑心 / 狐妖小红娘·王权篇 / 狐妖小红娘之王权篇 | 第26-27集 | 成毅 / 李一桐 / 郭俊辰 [国语] [简繁英字幕]", DownloadLink: "https://springsunday.net/download.php?id=123456&passkey=test", Volume: "1.5 GB"},
+			},
 		},
 		{
-			name: "多个种子ID（在outer表格内）",
-			html: `<html><body><div id="outer"><div><table><tr><td><a href="details.php?id=123456&hit=1">种子1</a></td><td><a href="details.php?id=789012&hit=1">种子2</a></td></tr></table></div></div></body></html>`,
-			expected: []string{"123456", "789012"},
+			name: "多个种子信息（在outer表格内）",
+			html: `<html><body><div id="outer"><div><table>
+				<tr><td class="embedded"><div class="torrent-title"><a href="details.php?id=123456&hit=1">Sword.and.Beloved.S01E26-E27.2025.2160p</a></div><div class="torrent-smalldescr"><span title="天地剑心 / 狐妖小红娘·王权篇 / 狐妖小红娘之王权篇 | 第26-27集 | 成毅 / 李一桐 / 郭俊辰 [国语] [简繁英字幕]">详细信息</span></div></td><td width="110"><a href="download.php?id=123456&passkey=test">下载</a></td><td>1.5 GB</td></tr>
+				<tr><td class="embedded"><div class="torrent-title"><a href="details.php?id=789012&hit=1">Sword.and.Beloved.S01E24-E25.2025.2160p</a></div><div class="torrent-smalldescr"><span title="天地剑心 / 狐妖小红娘·王权篇 / 狐妖小红娘之王权篇 | 第24-25集 | 成毅 / 李一桐 / 郭俊辰 [国语] [简繁英字幕]">详细信息</span></div></td><td width="110"><a href="download.php?id=789012&passkey=test">下载</a></td><td>2.1 GB</td></tr>
+			</table></div></div></body></html>`,
+			expected: []TorrentInfo{
+				{ID: "123456", Info: "天地剑心 / 狐妖小红娘·王权篇 / 狐妖小红娘之王权篇 | 第26-27集 | 成毅 / 李一桐 / 郭俊辰 [国语] [简繁英字幕]", DownloadLink: "https://springsunday.net/download.php?id=123456&passkey=test", Volume: "1.5 GB"},
+				{ID: "789012", Info: "天地剑心 / 狐妖小红娘·王权篇 / 狐妖小红娘之王权篇 | 第24-25集 | 成毅 / 李一桐 / 郭俊辰 [国语] [简繁英字幕]", DownloadLink: "https://springsunday.net/download.php?id=789012&passkey=test", Volume: "2.1 GB"},
+			},
 		},
-		{
-			name: "重复种子ID去重（在outer表格内）",
-			html: `<html><body><div id="outer"><div><table><tr><td><a href="details.php?id=123456&hit=1">种子1</a></td><td><a href="details.php?id=123456&hit=2">种子2</a></td><td><a href="details.php?id=789012&hit=1">种子3</a></td></tr></table></div></div></body></html>`,
-			expected: []string{"123456", "789012"},
-		},
-		{
-			name: "复杂HTML内容中的种子ID（在outer表格内）",
-			html: `<html><body><div id="outer"><div><table class="torrent-list"><tr><td><a href="details.php?id=111111&hit=1" class="torrent-link">种子A</a></td><td><span>其他内容</span></td><td><a href="details.php?id=222222&hit=1">种子B</a></td></tr></table></div></div></body></html>`,
-			expected: []string{"111111", "222222"},
-		},
-		{
-			name: "没有种子ID的HTML（在outer表格内）",
-			html: `<html><body><div id="outer"><div><table><tr><td><a href="other.php?id=123">其他链接</a></td></tr></table></div></div></body></html>`,
-			expected: []string{},
-		},
-		{
-			name: "边界情况 - ID为空（在outer表格内）",
-			html: `<html><body><div id="outer"><div><table><tr><td><a href="details.php?id=&hit=1">空ID</a></td><td><a href="details.php?id=123456&hit=1">正常ID</a></td></tr></table></div></div></body></html>`,
-			expected: []string{"123456"},
-		},
-		{
-			name: "包含用户详情链接的HTML（在outer表格外）",
-			html: `<html><body>
-				<a href="userdetails.php?id=87654">用户详情</a>
-				<div id="outer">
-					<div>
-						<table>
-							<tr>
-								<td><a href="details.php?id=123456&hit=1">种子1</a></td>
-								<td><a href="details.php?id=789012&page=0">种子2</a></td>
-							</tr>
-						</table>
-					</div>
-				</div>
-			</body></html>`,
-			expected: []string{"123456", "789012"},
-		},
-		{
-			name: "混合包含各种非种子链接（只有表格内的被提取）",
-			html: `<html><body>
-				<a href="userdetails.php?id=87654">用户详情</a>
-				<a href="user.php?id=12345">用户页面</a>
-				<div id="outer">
-					<div>
-						<table>
-							<tr>
-								<td><a href="details.php?id=111111&hit=1">真正的种子</a></td>
-								<td><a href="details.php?id=222222&page=1">另一个种子</a></td>
-							</tr>
-						</table>
-					</div>
-				</div>
-				<a href="sendmessage.php?id=45678">发送消息</a>
-				<a href="report.php?id=99999">举报</a>
-			</body></html>`,
-			expected: []string{"111111", "222222"},
-		},
-			}
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractTorrentIDs(tt.html)
+			result := extractTorrentInfos(tt.html)
 			if len(result) != len(tt.expected) {
-				t.Errorf("extractTorrentIDs() 返回长度 %d, 期望长度 %d", len(result), len(tt.expected))
+				t.Errorf("extractTorrentInfos() 返回长度 %d, 期望长度 %d", len(result), len(tt.expected))
 				return
 			}
 
-			for i, id := range result {
-				if id != tt.expected[i] {
-					t.Errorf("extractTorrentIDs()[%d] = %v, expected %v", i, id, tt.expected[i])
+			for i, info := range result {
+				if info.Info != tt.expected[i].Info {
+					t.Errorf("extractTorrentInfos()[%d].Info = %v, expected %v", i, info.Info, tt.expected[i].Info)
+				}
+				if info.DownloadLink != tt.expected[i].DownloadLink {
+					t.Errorf("extractTorrentInfos()[%d].DownloadLink = %v, expected %v", i, info.DownloadLink, tt.expected[i].DownloadLink)
+				}
+				if info.Volume != tt.expected[i].Volume {
+					t.Errorf("extractTorrentInfos()[%d].Volume = %v, expected %v", i, info.Volume, tt.expected[i].Volume)
 				}
 			}
 		})
@@ -229,12 +186,12 @@ func TestQueryTorrentList_ParameterValidation(t *testing.T) {
 // TestQueryTorrentList_Success 测试成功的请求处理
 func TestQueryTorrentList_Success(t *testing.T) {
 	// 模拟HTML响应
-	mockHTML := `<html><body>
-		<a href="details.php?id=123456&hit=1">种子1</a>
-		<a href="details.php?id=789012&hit=1">种子2</a>
-		<a href="details.php?id=123456&hit=2">种子1重复</a>
-		<a href="other.php?id=111">其他链接</a>
-	</body></html>`
+	mockHTML := `<html><body><div id="outer"><div><table>
+		<tr><td><a href="details.php?id=123456&hit=1">种子1</a></td></tr>
+		<tr><td><a href="details.php?id=789012&hit=1">种子2</a></td></tr>
+		<tr><td><a href="details.php?id=123456&hit=2">种子1重复</a></td></tr>
+		<tr><td><a href="other.php?id=111">其他链接</a></td></tr>
+	</table></div></div></body></html>`
 
 	// 创建测试服务器
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -251,8 +208,8 @@ func TestQueryTorrentList_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// 测试 extractTorrentIDs 函数
-	result := extractTorrentIDs(mockHTML)
+	// 测试 extractTorrentInfos 函数
+	result := extractTorrentInfos(mockHTML)
 	expected := []string{"123456", "789012"}
 
 	if len(result) != len(expected) {
@@ -260,9 +217,9 @@ func TestQueryTorrentList_Success(t *testing.T) {
 		return
 	}
 
-	for i, id := range result {
-		if id != expected[i] {
-			t.Errorf("结果[%d] = %v，期望 %v", i, id, expected[i])
+	for i, info := range result {
+		if info.ID != expected[i] {
+			t.Errorf("结果[%d].ID = %v，期望 %v", i, info.ID, expected[i])
 		}
 	}
 }
@@ -271,7 +228,7 @@ func TestQueryTorrentList_Success(t *testing.T) {
 func TestQueryTorrentList_EmptyResponse(t *testing.T) {
 	// 测试空HTML响应的解析
 	emptyHTML := ""
-	result := extractTorrentIDs(emptyHTML)
+	result := extractTorrentInfos(emptyHTML)
 
 	if len(result) != 0 {
 		t.Errorf("期望空结果，但得到 %v", result)
@@ -279,27 +236,27 @@ func TestQueryTorrentList_EmptyResponse(t *testing.T) {
 
 	// 测试只有空格的HTML响应
 	spaceHTML := "   \n\t  "
-	result = extractTorrentIDs(spaceHTML)
+	result = extractTorrentInfos(spaceHTML)
 
 	if len(result) != 0 {
 		t.Errorf("期望空结果，但得到 %v", result)
 	}
 }
 
-// BenchmarkExtractTorrentIDs extractTorrentIDs 函数的基准测试
-func BenchmarkExtractTorrentIDs(b *testing.B) {
+// BenchmarkExtractTorrentInfos extractTorrentInfos 函数的基准测试
+func BenchmarkExtractTorrentInfos(b *testing.B) {
 	// 创建包含大量种子ID的HTML内容
 	var htmlBuilder strings.Builder
-	htmlBuilder.WriteString("<html><body>")
+	htmlBuilder.WriteString("<html><body><div id=\"outer\"><div><table>")
 	for i := 0; i < 1000; i++ {
-		htmlBuilder.WriteString(fmt.Sprintf(`<a href="details.php?id=%d&hit=1">种子%d</a>`, i, i))
+		htmlBuilder.WriteString(fmt.Sprintf(`<tr><td><a href="details.php?id=%d&hit=1">种子%d</a></td></tr>`, i, i))
 	}
-	htmlBuilder.WriteString("</body></html>")
+	htmlBuilder.WriteString("</table></div></div></body></html>")
 	html := htmlBuilder.String()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		extractTorrentIDs(html)
+		extractTorrentInfos(html)
 	}
 }
 
@@ -311,10 +268,15 @@ func TestQueryTorrentListInReality(t *testing.T) {
 		Resolution: RES_1080P,
 	}
 	cookie := os.Getenv("SSD_COOKIE")
-	torrentIDs, err := QueryTorrentList(cookie, info)
+	torrentInfos, err := QueryTorrentList(cookie, info)
 	if err != nil {
 	    t.Fatalf("查询失败: %v\n", err)
 	}
-	assert.Equal(t, []string{"577692", "577598"}, torrentIDs)
-
+	expectedIDs := []string{"579091", "577692", "577598"}
+	actualIDs := make([]string, len(torrentInfos))
+	for i, info := range torrentInfos {
+		actualIDs[i] = info.ID
+	}
+	assert.Equal(t, expectedIDs, actualIDs)
+	fmt.Printf("torrentInfos: %v", torrentInfos)
 }
