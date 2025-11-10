@@ -11,153 +11,230 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"tvsubscribe"
+	"tvsubscribe/config"
+	"tvsubscribe/server"
+	"tvsubscribe/subscribe"
 )
 
-type Config struct {
-	Endpoint        string                `json:"endpoint"`
-	Cookie          string                `json:"cookie"`
-	IntervalMinutes int                   `json:"interval_minutes"`
-	WeChatServer    string                `json:"wechat_server"`
-	WeChatToken     string                `json:"wechat_token"`
-	Subscribes      []tvsubscribe.TVInfo `json:"subscribes"`
+// 辅助函数
+func getString(v interface{}) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
-// ConfigManager 配置管理器，支持热重载
+func getInt(v interface{}) int {
+	if i, ok := v.(int); ok {
+		return i
+	}
+	if f, ok := v.(float64); ok {
+		return int(f)
+	}
+	return 0
+}
+
+
+// ConfigManager 配置管理器
 type ConfigManager struct {
-	config      *Config
+	config      *config.Config
 	configPath  string
 	mu          sync.RWMutex
-	watcher     *fsnotify.Watcher
-	onReload    func(*Config) // 配置重载后的回调函数
 }
 
 // loadConfig 从配置文件加载配置
-func loadConfig(configPath string) (*Config, error) {
+func loadConfig(configPath string) (*config.Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("读取配置文件失败: %v", err)
 	}
 
-	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
+	var cfg config.Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %v", err)
 	}
 
 	// 验证必填字段
-	if config.Cookie == "" {
+	if cfg.Cookie == "" {
 		return nil, fmt.Errorf("配置文件中 cookie 不能为空")
 	}
-	if config.IntervalMinutes <= 0 {
-		config.IntervalMinutes = 60 // 默认60分钟
+	if cfg.IntervalMinutes <= 0 {
+		cfg.IntervalMinutes = 60 // 默认60分钟
+	}
+	if cfg.Port <= 0 {
+		cfg.Port = 8443 // 默认8443端口
 	}
 
-	return &config, nil
+	return &cfg, nil
 }
 
 // NewConfigManager 创建新的配置管理器
-func NewConfigManager(configPath string, onReload func(*Config)) (*ConfigManager, error) {
+func NewConfigManager(configPath string) (*ConfigManager, error) {
 	config, err := loadConfig(configPath)
 	if err != nil {
 		return nil, err
 	}
 
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, fmt.Errorf("创建文件监视器失败: %v", err)
-	}
-
 	// 获取配置文件的绝对路径
 	absPath, err := filepath.Abs(configPath)
 	if err != nil {
-		watcher.Close()
 		return nil, fmt.Errorf("获取配置文件绝对路径失败: %v", err)
-	}
-
-	// 添加配置文件到监视器
-	if err := watcher.Add(absPath); err != nil {
-		watcher.Close()
-		return nil, fmt.Errorf("添加配置文件到监视器失败: %v", err)
 	}
 
 	manager := &ConfigManager{
 		config:     config,
 		configPath: absPath,
-		watcher:    watcher,
-		onReload:   onReload,
 	}
 
 	return manager, nil
 }
 
 // GetConfig 获取当前配置（线程安全）
-func (m *ConfigManager) GetConfig() *Config {
+func (m *ConfigManager) GetConfig() map[string]interface{} {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.config
+
+	// 将config.Config转换为map
+	result := map[string]interface{}{
+		"endpoint":         m.config.Endpoint,
+		"cookie":           m.config.Cookie,
+		"interval_minutes": m.config.IntervalMinutes,
+		"wechat_server":    m.config.WeChatServer,
+		"wechat_token":     m.config.WeChatToken,
+		"port":             m.config.Port,
+	}
+	return result
 }
 
-// ReloadConfig 重新加载配置
-func (m *ConfigManager) ReloadConfig() error {
+// UpdateConfig 更新配置
+func (m *ConfigManager) UpdateConfig(updates map[string]interface{}) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	config, err := loadConfig(m.configPath)
-	if err != nil {
-		return err
+	updated := false
+	if endpoint, ok := updates["endpoint"].(string); ok && endpoint != "" {
+		m.config.Endpoint = endpoint
+		updated = true
+	}
+	if cookie, ok := updates["cookie"].(string); ok && cookie != "" {
+		m.config.Cookie = cookie
+		updated = true
+	}
+	if interval, ok := updates["interval_minutes"].(float64); ok && interval > 0 {
+		m.config.IntervalMinutes = int(interval)
+		updated = true
+	}
+	if wechatServer, ok := updates["wechat_server"].(string); ok && wechatServer != "" {
+		m.config.WeChatServer = wechatServer
+		updated = true
+	}
+	if wechatToken, ok := updates["wechat_token"].(string); ok && wechatToken != "" {
+		m.config.WeChatToken = wechatToken
+		updated = true
+	}
+	if port, ok := updates["port"].(float64); ok && port > 0 {
+		m.config.Port = int(port)
+		updated = true
 	}
 
-	m.config = config
-	log.Printf("配置文件已重新加载，订阅数量: %d", len(config.Subscribes))
+	if !updated {
+		return fmt.Errorf("没有有效的配置字段被更新")
+	}
 
-	// 调用重载回调函数
-	if m.onReload != nil {
-		m.onReload(config)
+	// 保存配置到文件
+	return m.saveConfig()
+}
+
+// saveConfig 保存配置到文件
+func (m *ConfigManager) saveConfig() error {
+	data, err := json.MarshalIndent(m.config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("序列化配置失败: %v", err)
+	}
+
+	if err := os.WriteFile(m.configPath, data, 0644); err != nil {
+		return fmt.Errorf("写入配置文件失败: %v", err)
 	}
 
 	return nil
 }
 
-// WatchConfigChanges 监视配置文件变化
-func (m *ConfigManager) WatchConfigChanges() {
-	go func() {
-		for {
-			select {
-			case event, ok := <-m.watcher.Events:
-				if !ok {
-					return
-				}
-				// 只处理写入和重命名事件
-				if event.Op.Has(fsnotify.Write) || event.Op.Has(fsnotify.Rename) {
-					// 小延迟，确保文件写入完成
-					time.Sleep(100 * time.Millisecond)
-					if err := m.ReloadConfig(); err != nil {
-						log.Printf("重新加载配置文件失败: %v", err)
-					}
-				}
-			case err, ok := <-m.watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Printf("配置文件监视错误: %v", err)
-			}
-		}
-	}()
-}
+// processSingleTV 处理单个电视剧订阅
+func processSingleTV(configMgr *ConfigManager, tvInfo tvsubscribe.TVInfo) {
+	// 获取实际的config对象
+	configMap := configMgr.GetConfig()
 
-// Close 关闭配置管理器
-func (m *ConfigManager) Close() {
-	if m.watcher != nil {
-		m.watcher.Close()
+	// 模拟config对象的行为
+	config := struct {
+		Endpoint        string
+		Cookie          string
+		IntervalMinutes int
+		WeChatServer    string
+		WeChatToken     string
+		Port            int
+	}{
+		Endpoint:        getString(configMap["endpoint"]),
+		Cookie:          getString(configMap["cookie"]),
+		IntervalMinutes: getInt(configMap["interval_minutes"]),
+		WeChatServer:    getString(configMap["wechat_server"]),
+		WeChatToken:     getString(configMap["wechat_token"]),
+		Port:            getInt(configMap["port"]),
+	}
+
+	log.Printf("处理豆瓣ID: %s, 分辨率: %d", tvInfo.DouBanID, tvInfo.Resolution)
+
+	// 查询种子列表
+	torrentInfos, err := tvsubscribe.QueryTorrentList(config.Cookie, &tvInfo)
+	if err != nil {
+		log.Printf("查询种子列表失败 (豆瓣ID: %s): %v", tvInfo.DouBanID, err)
+		return
+	}
+
+	if len(torrentInfos) == 0 {
+		log.Printf("未找到可下载的种子 (豆瓣ID: %s)", tvInfo.DouBanID)
+		return
+	}
+
+	log.Printf("找到 %d 个种子 (豆瓣ID: %s)", len(torrentInfos), tvInfo.DouBanID)
+
+	// 下载种子
+	if err := tvsubscribe.DownloadTorrent(torrentInfos, config.Endpoint, config.WeChatServer, config.WeChatToken); err != nil {
+		log.Printf("下载种子失败 (豆瓣ID: %s): %v", tvInfo.DouBanID, err)
+	} else {
+		log.Printf("成功处理 %d 个种子 (豆瓣ID: %s)", len(torrentInfos), tvInfo.DouBanID)
 	}
 }
 
 // processTVSubscribes 处理所有订阅的电视剧
-func processTVSubscribes(config *Config) {
+func processTVSubscribes(configMgr *ConfigManager, subscribes []tvsubscribe.TVInfo) {
+	// 获取实际的config对象
+	configMap := configMgr.GetConfig()
+
+	// 模拟config对象的行为
+	config := struct {
+		Endpoint        string
+		Cookie          string
+		IntervalMinutes int
+		WeChatServer    string
+		WeChatToken     string
+		Port            int
+	}{
+		Endpoint:        getString(configMap["endpoint"]),
+		Cookie:          getString(configMap["cookie"]),
+		IntervalMinutes: getInt(configMap["interval_minutes"]),
+		WeChatServer:    getString(configMap["wechat_server"]),
+		WeChatToken:     getString(configMap["wechat_token"]),
+		Port:            getInt(configMap["port"]),
+	}
 	log.Println("开始处理电视剧订阅...")
 
-	for _, tv := range config.Subscribes {
+	if len(subscribes) == 0 {
+		log.Println("没有订阅的电视剧")
+		return
+	}
+
+	for _, tv := range subscribes {
 		log.Printf("处理豆瓣ID: %s, 分辨率: %d", tv.DouBanID, tv.Resolution)
 
 		// 查询种子列表
@@ -186,55 +263,79 @@ func processTVSubscribes(config *Config) {
 }
 
 // startScheduler 启动定时任务
-func startScheduler(configManager *ConfigManager) {
+func startScheduler(configManager *ConfigManager, subscribeManager *subscribe.SubscribeManager) {
 	// 立即执行一次
-	processTVSubscribes(configManager.GetConfig())
+	processTVSubscribes(configManager, subscribeManager.GetSubscribes())
 
 	// 定时执行
 	go func() {
 		for {
-			config := configManager.GetConfig()
-			interval := time.Duration(config.IntervalMinutes) * time.Minute
+			configMap := configManager.GetConfig()
+			interval := time.Duration(getInt(configMap["interval_minutes"])) * time.Minute
 
 			log.Printf("定时任务等待 %v 后执行", interval)
 			time.Sleep(interval)
 
-			processTVSubscribes(config)
+			processTVSubscribes(configManager, subscribeManager.GetSubscribes())
 		}
 	}()
 }
 
 func main() {
-	// 配置重载后的回调函数
-	onConfigReload := func(config *Config) {
-		log.Println("配置已更新，立即重新处理所有订阅的电视剧")
-		processTVSubscribes(config)
+	// 检查是否为CLI模式
+	if len(os.Args) > 1 {
+		RunCLI()
+		return
 	}
 
+	// 服务器模式
 	// 创建配置管理器
-	configManager, err := NewConfigManager("./config.json", onConfigReload)
+	configManager, err := NewConfigManager("./config.json")
 	if err != nil {
 		log.Fatalf("配置管理器创建失败: %v", err)
 	}
-	defer configManager.Close()
+
+	// 创建订阅管理器
+	subscribeManager, err := subscribe.NewSubscribeManager("./subscribes.json")
+	if err != nil {
+		log.Fatalf("订阅管理器创建失败: %v", err)
+	}
 
 	// 获取初始配置
-	config := configManager.GetConfig()
-	log.Printf("配置加载成功，订阅数量: %d, 检查间隔: %d 分钟",
-		len(config.Subscribes), config.IntervalMinutes)
-
-	// 启动配置文件监视
-	configManager.WatchConfigChanges()
-	log.Println("配置文件监视已启动，修改配置文件将自动重新加载并立即执行")
-
-	// 启动定时任务
-	startScheduler(configManager)
+	configMap := configManager.GetConfig()
+	log.Printf("配置加载成功，监听端口: %d, 检查间隔: %d 分钟", getInt(configMap["port"]), getInt(configMap["interval_minutes"]))
 
 	// 设置信号监听，优雅退出
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
+	// 创建处理函数
+	processTVFunc := func() {
+		subscribes := subscribeManager.GetSubscribes()
+		processTVSubscribes(configManager, subscribes)
+	}
+
+	processSingleFunc := func(tvInfo tvsubscribe.TVInfo) {
+		processSingleTV(configManager, tvInfo)
+	}
+
+	// 创建HTTP服务器
+	httpServer := server.NewServer(configManager, subscribeManager, processTVFunc, processSingleFunc)
+
+	// 启动定时任务
+	startScheduler(configManager, subscribeManager)
+
+	// 在单独的goroutine中启动HTTP服务器
+	go func() {
+		if err := httpServer.Start(); err != nil {
+			log.Printf("HTTP服务器启动失败: %v", err)
+			// HTTP服务器启动失败，退出程序
+			sigChan <- syscall.SIGTERM
+		}
+	}()
+
 	log.Println("程序已启动，按 Ctrl+C 退出")
+	log.Printf("HTTP API服务器已启动，访问地址: http://127.0.0.1:%d", getInt(configMap["port"]))
 
 	// 等待退出信号
 	sig := <-sigChan

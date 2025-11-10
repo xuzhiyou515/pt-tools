@@ -39,7 +39,7 @@ type TorrentInfo struct {
 - Config 添加 Port 字段，用于配置监听的端口，默认监听8443端口
 
 ### 5、优化配置和订阅调整 TODO
-使用gin框架，支持以下http接口来获取、调整配置和订阅。
+使用gin框架，支持以下http接口来获取、调整配置和订阅
 - GET /getConfig 返回 Config json 结构
 - POST /setConfig payload 是 Config 结构（未包含的字段不修改）
   - 更新内存的Config数据，并把更新后的Config写入配置文件
@@ -53,6 +53,7 @@ tvsubscribe config --list 获取配置
 tvsubscribe config --set "endpoint=xxxx" "cookie=xxxx" "interval_minutes=5" "wechat_server=xxxx" "wechat_token=xxxx" 设置配置（配置时不需要每项都设置）
 tvsubscribe subscribe --list 获取订阅
 tvsubscribe subscribe --add "douban_id=xxxxx" "resolution=1" 添加订阅 （resolution可以省略，默认是1）
-tvsubscribe subscribe --add "douban_id=xxxxx" "resolution=1" 删除订阅 （resolution可以省略，默认是1）
+tvsubscribe subscribe --del "douban_id=xxxxx" "resolution=1" 删除订阅 （resolution可以省略，默认是1）
 以上命令都支持通过 --url 配置服务器地址 默认是 "127.0.0.1:8443"
+使用现有满足需求的库实现命令行的解析，比如 flag
 
