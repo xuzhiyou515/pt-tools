@@ -6,6 +6,12 @@
 
 set -e  # 遇到错误时退出
 
+# 用户配置目录
+USER_CONFIG_DIR="$HOME/.config/tvsubscribe"
+
+# 确保用户配置目录存在
+mkdir -p "$USER_CONFIG_DIR"
+
 # 获取脚本所在目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "开始部署TVSubscribe..."
@@ -35,7 +41,7 @@ fi
 
 # 3. 停止tvsubscribe服务
 echo "步骤3: 停止tvsubscribe服务..."
-sudo systemctl stop tvsubscribe
+systemctl --user stop tvsubscribe
 if [ $? -eq 0 ]; then
     echo "✓ 服务已停止"
 else
@@ -44,33 +50,32 @@ fi
 
 # 4. 删除历史网页文件
 echo "步骤4: 清理旧的网页文件..."
-sudo rm -rf /opt/tvsubscribe/web/*
+rm -rf "$USER_CONFIG_DIR/web"/*
 echo "✓ 旧网页文件已清理"
 
-# 5. 复制生成的文件到目标目录
-echo "步骤5: 复制新文件..."
+# 5. 复制生成的文件到用户目录
+echo "步骤5: 复制新文件到用户目录..."
 # 复制Go程序
-sudo cp "$SCRIPT_DIR/cmd/tvsubscribe" /opt/tvsubscribe/
-sudo chown tvsubscribe:tvsubscribe /opt/tvsubscribe/tvsubscribe
-echo "✓ 后端程序已复制并设置权限"
+cp "$SCRIPT_DIR/cmd/tvsubscribe" "$USER_CONFIG_DIR/"
+echo "✓ 后端程序已复制到用户目录"
 
-# 复制前端文件
-sudo cp -r "$SCRIPT_DIR/web/dist"/ /opt/tvsubscribe/web/
-sudo chown -R tvsubscribe:tvsubscribe /opt/tvsubscribe/web/
-echo "✓ 前端文件已复制并设置权限"
+# 复制前端文件到用户目录
+mkdir -p "$USER_CONFIG_DIR/web"
+cp -r "$SCRIPT_DIR/web/dist" "$USER_CONFIG_DIR/web/"
+echo "✓ 前端文件已复制到用户目录"
 
 # 6. 启动tvsubscribe服务
 echo "步骤6: 启动tvsubscribe服务..."
-sudo systemctl start tvsubscribe
+systemctl --user start tvsubscribe
 sleep 2  # 等待服务启动
 
 # 检查服务状态
-if sudo systemctl is-active --quiet tvsubscribe; then
+if systemctl --user is-active --quiet tvsubscribe; then
     echo "✓ 服务启动成功"
     echo "部署完成！TVSubscribe服务正在运行"
 else
     echo "✗ 服务启动失败"
-    echo "请检查服务日志: sudo journalctl -u tvsubscribe -f"
+    echo "请检查服务日志: journalctl --user -u tvsubscribe -f"
     exit 1
 fi
 
