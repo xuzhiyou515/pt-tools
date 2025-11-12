@@ -13,4 +13,6 @@ type SubscribeManager interface {
 	GetSubscribes() []tvsubscribe.TVInfo
 	AddSubscribe(tvInfo tvsubscribe.TVInfo) error
 	RemoveSubscribe(tvInfo tvsubscribe.TVInfo) error
+	RemoveSubscribesByID(ids []string) error
+	GetSubscribeByID(id string) (tvsubscribe.TVInfo, error)
 }

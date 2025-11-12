@@ -1,14 +1,27 @@
 package subscribe
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"tvsubscribe"
 )
+
+// generateUniqueID 生成唯一的订阅ID
+func generateUniqueID() string {
+	bytes := make([]byte, 8)
+	if _, err := rand.Read(bytes); err != nil {
+		// 如果随机数生成失败，使用时间戳作为后备方案
+		return fmt.Sprintf("%d", len(bytes)*1000+int(time.Now().Unix()))
+	}
+	return hex.EncodeToString(bytes)
+}
 
 // SubscribeManager 订阅管理器
 type SubscribeManager struct {
@@ -37,6 +50,13 @@ func loadSubscribes(subscribePath string) ([]tvsubscribe.TVInfo, error) {
 	var subscribes []tvsubscribe.TVInfo
 	if err := json.Unmarshal(data, &subscribes); err != nil {
 		return nil, fmt.Errorf("解析订阅文件失败: %v", err)
+	}
+
+	// 为没有ID的订阅生成唯一ID
+	for i := range subscribes {
+		if subscribes[i].ID == "" {
+			subscribes[i].ID = generateUniqueID()
+		}
 	}
 
 	return subscribes, nil
@@ -100,6 +120,9 @@ func (m *SubscribeManager) AddSubscribe(tvInfo tvsubscribe.TVInfo) error {
 		}
 	}
 
+	// 生成唯一ID
+	tvInfo.ID = generateUniqueID()
+
 	// 如果名称为空，尝试从豆瓣获取
 	if tvInfo.Name == "" {
 		name, err := tvsubscribe.GetTVNameByDouBanID(tvInfo.DouBanID)
@@ -151,4 +174,60 @@ func (m *SubscribeManager) RemoveSubscribe(tvInfo tvsubscribe.TVInfo) error {
 
 	m.subscribes = newSubscribes
 	return nil
+}
+
+// RemoveSubscribesByID 根据ID数组删除订阅
+func (m *SubscribeManager) RemoveSubscribesByID(ids []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(ids) == 0 {
+		return fmt.Errorf("ID列表不能为空")
+	}
+
+	// 创建ID集合以便快速查找
+	idSet := make(map[string]bool)
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		idSet[id] = true
+	}
+
+	// 过滤掉要删除的订阅
+	newSubscribes := make([]tvsubscribe.TVInfo, 0, len(m.subscribes))
+	removedCount := 0
+	for _, existing := range m.subscribes {
+		if idSet[existing.ID] {
+			removedCount++
+		} else {
+			newSubscribes = append(newSubscribes, existing)
+		}
+	}
+
+	if removedCount == 0 {
+		return fmt.Errorf("未找到要删除的订阅")
+	}
+
+	// 保存到文件
+	if err := saveSubscribes(m.subscribePath, newSubscribes); err != nil {
+		return err
+	}
+
+	m.subscribes = newSubscribes
+	return nil
+}
+
+// GetSubscribeByID 根据ID获取订阅
+func (m *SubscribeManager) GetSubscribeByID(id string) (tvsubscribe.TVInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, subscribe := range m.subscribes {
+		if subscribe.ID == id {
+			return subscribe, nil
+		}
+	}
+
+	return tvsubscribe.TVInfo{}, fmt.Errorf("订阅不存在: ID=%s", id)
 }

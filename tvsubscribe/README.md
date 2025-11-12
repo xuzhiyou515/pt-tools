@@ -14,9 +14,13 @@
 
 ### 智能功能
 - 🤖 **自动获取电视剧名称** - 根据豆瓣ID自动获取中文名称
+- 🔍 **豆瓣搜索功能** - 支持通过电视剧名称搜索豆瓣ID，显示海报、年份、集数
 - 📧 **微信通知** - 支持微信消息推送通知
 - 🔄 **配置热重载** - 修改配置后自动生效
 - 📊 **实时状态监控** - HTTP API提供完整的状态信息
+- ⚡ **批量操作** - 支持批量删除和立即触发订阅处理
+- 🎯 **精确定位** - 基于唯一ID的订阅管理，避免误操作
+- 🚀 **立即触发** - 支持手动立即触发指定订阅的种子查询和下载
 
 ### 管理方式
 - 🌐 **Web界面管理** - 通过浏览器访问 http://localhost:8443
@@ -93,11 +97,13 @@ go build -o tvsubscribe cmd/*.go
 ```json
 [
   {
+    "id": "a1b2c3d4e5f6",
     "douban_id": "36391902",
     "name": "庆余年 第二季",
     "resolution": 1
   },
   {
+    "id": "b7c8d9e0f1g2",
     "douban_id": "26798436",
     "name": "琅琊榜",
     "resolution": 0
@@ -105,6 +111,7 @@ go build -o tvsubscribe cmd/*.go
 ]
 ```
 
+- `id`: 订阅的唯一标识符（自动生成）
 - `douban_id`: 豆瓣电视剧ID
 - `name`: 电视剧名称（自动获取）
 - `resolution`: 分辨率 (0=2160P, 1=1080P)
@@ -125,9 +132,12 @@ go build -o tvsubscribe cmd/*.go
 
 3. 在Web界面中：
    - 📋 查看和管理订阅列表
+   - 🔍 搜索豆瓣电视剧添加订阅
    - ⚙️ 配置服务器参数
    - 📊 监控下载状态
+   - ⚡ 批量操作（删除、触发）
    - 🔄 实时更新配置
+   - 🎯 精确选择和操作订阅
 
 ### 命令行管理
 
@@ -168,6 +178,22 @@ curl http://localhost:8443/getSubscribeList
 curl -X POST http://localhost:8443/addSubscribe \
   -H "Content-Type: application/json" \
   -d '{"douban_id": "36391902", "resolution": 1}'
+
+# 批量删除订阅（推荐）
+curl -X POST http://localhost:8443/delSubscribe \
+  -H "Content-Type: application/json" \
+  -d '{"ids": ["a1b2c3d4e5f6", "b7c8d9e0f1g2"]}'
+
+# 立即触发订阅处理
+curl -X POST http://localhost:8443/triggerNow \
+  -H "Content-Type: application/json" \
+  -d '{"ids": ["a1b2c3d4e5f6"]}'
+
+# 豆瓣搜索
+curl "http://localhost:8443/searchDouBan?name=庆余年"
+
+# 图片代理（避免豆瓣防盗链）
+curl "http://localhost:8443/proxy/image?url=https://img9.doubanio.com/..."
 ```
 
 ## 🏗️ 运行模式

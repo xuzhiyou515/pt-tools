@@ -1,14 +1,28 @@
 package tvsubscribe
 
 import (
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
+
+// helper function to get minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 const (
 	RES_2160P = iota
@@ -16,9 +30,10 @@ const (
 )
 
 type TVInfo struct {
-	DouBanID   string `json:"douban_id"`
-	Name       string `json:"name"`
-	Resolution int    `json:"resolution"`
+	ID         string `json:"id"`         // 订阅唯一标识
+	DouBanID   string `json:"douban_id"`  // 豆瓣ID
+	Name       string `json:"name"`       // 电视剧名称
+	Resolution int    `json:"resolution"` // 分辨率
 }
 
 type TorrentInfo struct {
@@ -26,6 +41,27 @@ type TorrentInfo struct {
 	Info         string // 种子信息
 	DownloadLink string // 种子下载链接
 	Volume       string // 种子大小
+}
+
+// DoubanSearchResult 豆瓣搜索结果
+type DoubanSearchResult struct {
+	ID      string `json:"douban_id"` // 豆瓣ID
+	Title   string `json:"title"`     // 标题
+	Img     string `json:"img"`       // 图片URL
+	Year    string `json:"year"`      // 年份
+	Episode string `json:"episode"`   // 集数
+}
+
+// doubanAPIResponse 豆瓣API原始响应结构
+type doubanAPIResponse struct {
+	Episode   string `json:"episode"`
+	Img       string `json:"img"`
+	Title     string `json:"title"`
+	URL       string `json:"url"`
+	Type      string `json:"type"`      // 类型，我们需要筛选type为movie的
+	Year      string `json:"year"`
+	SubTitle  string `json:"sub_title"`
+	ID        string `json:"id"`        // 豆瓣ID
 }
 
 // 搜索链接
@@ -292,5 +328,123 @@ func GetTVNameByDouBanID(douBanID string) (string, error) {
 	}
 
 	return title, nil
+}
+
+// SearchDouBan 搜索豆瓣
+func SearchDouBan(name string) ([]DoubanSearchResult, error) {
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("搜索名称不能为空")
+	}
+
+	// 构建豆瓣API URL
+	baseURL := "https://movie.douban.com/j/subject_suggest"
+	params := url.Values{}
+	params.Add("q", name)
+	searchURL := baseURL + "?" + params.Encode()
+
+	// 创建HTTP客户端，设置超时
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// 创建请求
+	req, err := http.NewRequest("GET", searchURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %v", err)
+	}
+
+	// 设置HTTP头，模拟浏览器访问
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "application/json, text/javascript, */*")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
+	req.Header.Set("Accept-Encoding", "identity") // 不使用压缩
+	req.Header.Set("Referer", "https://movie.douban.com/")
+	req.Header.Set("Connection", "keep-alive")
+
+	// 发送请求
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求豆瓣API失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查HTTP状态码
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("豆瓣API返回错误状态码: %d", resp.StatusCode)
+	}
+
+	// 读取响应体
+	var reader io.Reader = resp.Body
+
+	// 检查是否是gzip压缩
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		gzipReader, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("创建gzip读取器失败: %v", err)
+		}
+		defer gzipReader.Close()
+		reader = gzipReader
+	}
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应体失败: %v", err)
+	}
+
+	// 记录原始响应用于调试
+	responseStr := string(body)
+	log.Printf("豆瓣API响应长度: %d", len(responseStr))
+
+	// 清理响应
+	cleanedBody := strings.TrimSpace(responseStr)
+
+	// 检查JSON格式是否有效
+	if !strings.HasPrefix(cleanedBody, "[") {
+		return nil, fmt.Errorf("响应不是有效的JSON格式，期望数组格式。前200字符: %s", cleanedBody[:min(200, len(cleanedBody))])
+	}
+
+	// 解析JSON响应
+	var apiResponses []doubanAPIResponse
+	if err := json.Unmarshal([]byte(cleanedBody), &apiResponses); err != nil {
+		return nil, fmt.Errorf("解析JSON响应失败: %v，响应内容前200字符: %s", err, cleanedBody[:min(200, len(cleanedBody))])
+	}
+
+// 筛选type为movie的条目并转换为返回格式
+	var results []DoubanSearchResult
+	for _, item := range apiResponses {
+		if item.Type == "movie" && item.ID != "" && item.Title != "" {
+			result := DoubanSearchResult{
+				ID:      item.ID,
+				Title:   item.Title,
+				Img:     item.Img,
+				Year:    item.Year,
+				Episode: item.Episode,
+			}
+			results = append(results, result)
+		}
+	}
+
+	// 按豆瓣ID排序（按数字大小降序排列，新ID在前）
+	sort.Slice(results, func(i, j int) bool {
+		// 尝试将ID转换为数字进行比较
+		id1, err1 := strconv.Atoi(results[i].ID)
+		id2, err2 := strconv.Atoi(results[j].ID)
+
+		if err1 == nil && err2 == nil {
+			// 两个都是数字，按数字降序排列
+			return id1 > id2
+		} else if err1 == nil {
+			// 只有第一个是数字，数字ID排在前面
+			return true
+		} else if err2 == nil {
+			// 只有第二个是数字，字符串ID排在后面
+			return false
+		} else {
+			// 两个都不是数字，按字符串降序排列
+			return results[i].ID > results[j].ID
+		}
+	})
+
+	return results, nil
 }
 
