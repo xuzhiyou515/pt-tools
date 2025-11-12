@@ -60,3 +60,5 @@ tvsubscribe/web/cache/
 *.exe
 tvsubscribe/tvsubscribe
 tvsubscribe/tvsubscribe_server
+tvsubscribe/cmd/tvsubscribe
+tvsubscribe/cmd/tvsubscribe.exe
