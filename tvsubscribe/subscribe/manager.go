@@ -100,6 +100,17 @@ func (m *SubscribeManager) AddSubscribe(tvInfo tvsubscribe.TVInfo) error {
 		}
 	}
 
+	// 如果名称为空，尝试从豆瓣获取
+	if tvInfo.Name == "" {
+		name, err := tvsubscribe.GetTVNameByDouBanID(tvInfo.DouBanID)
+		if err != nil {
+			// 获取名称失败，但不阻止添加订阅，使用默认名称
+			tvInfo.Name = fmt.Sprintf("豆瓣ID: %s", tvInfo.DouBanID)
+		} else {
+			tvInfo.Name = name
+		}
+	}
+
 	// 添加新订阅
 	m.subscribes = append(m.subscribes, tvInfo)
 

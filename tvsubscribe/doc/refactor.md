@@ -33,12 +33,12 @@ type TorrentInfo struct {
 - **直接使用下载链接**：优先使用页面上的完整下载链接，提高可靠性
 - **移除 passkey 依赖**：简化配置和参数传递
 
-### 4. 调整配置文件 TODO
+### 4. 调整配置文件
 - 在 tvsubscribe\cmd\main.go 中 Config 移除 Subscribes
 - Subscribes 使用独立的变量，从 ./subscribes.json 中读取数据
 - Config 添加 Port 字段，用于配置监听的端口，默认监听8443端口
 
-### 5、优化配置和订阅调整 TODO
+### 5、优化配置和订阅调整
 使用gin框架，支持以下http接口来获取、调整配置和订阅
 - GET /getConfig 返回 Config json 结构
 - POST /setConfig payload 是 Config 结构（未包含的字段不修改）
@@ -57,3 +57,212 @@ tvsubscribe subscribe --del "douban_id=xxxxx" "resolution=1" 删除订阅 （res
 以上命令都支持通过 --url 配置服务器地址 默认是 "127.0.0.1:8443"
 使用现有满足需求的库实现命令行的解析，比如 flag
 
+### 6、实现管理页面
+使用vue框架调用5中实现的http接口实现简单的管理界面
+
+## 重构实现状态
+
+### ✅ 已完成的功能
+
+1. **TorrentInfo 结构体** - 完整的种子信息结构
+   - ID: 种子唯一标识
+   - Info: 种子详细信息
+   - DownloadLink: 直接下载链接
+   - Volume: 种子大小
+
+2. **种子查询重构** - 基于TorrentInfo的完整信息提取
+   - 重构QueryTorrentList函数返回值类型
+   - 新增extractTorrentInfos函数
+   - 改进HTML解析逻辑，支持更多种子信息
+
+3. **下载功能重构** - 基于TorrentInfo的可靠下载
+   - 移除buildDownloadURL函数
+   - 新增downloadATorrentFromInfo函数
+   - 直接使用页面上的完整下载链接
+
+4. **配置管理重构** - 独立的配置和订阅管理
+   - Config和Subscribes分离存储
+   - 新增Port字段用于HTTP服务
+   - 实现配置管理器接口
+
+5. **HTTP API服务** - 基于Gin框架的完整API
+   - 配置管理API (getConfig/setConfig)
+   - 订阅管理API (getSubscribeList/addSubscribe/delSubscribe)
+   - 健康检查API (health)
+
+6. **CLI命令行工具** - 完整的命令行管理功能
+   - 配置管理命令 (config --list/--set)
+   - 订阅管理命令 (subscribe --list/--add/--del)
+   - 远程服务器支持 (--url参数)
+
+7. **Vue管理界面** - 现代化Web管理界面
+   - 基于Vue 3 + Element Plus
+   - 配置管理页面
+   - 订阅管理页面（支持多选批量删除）
+   - 响应式设计
+
+8. **静态文件集成** - 内置Web服务
+   - 后端直接host Vue管理界面
+   - SPA路由支持
+   - 单端口部署 (默认8443)
+
+9. **TVInfo增强** - 智能名称获取
+   - 新增Name字段
+   - 自动从豆瓣获取电视剧名称
+   - 支持多种解析策略
+
+10. **微信通知功能** - 实时状态推送
+    - 种子下载成功/失败通知
+    - 配置微信服务器和Token
+    - 异步通知发送
+
+## 技术栈
+
+### 后端
+- **Go 1.19+** - 主要开发语言
+- **Gin** - HTTP Web框架
+- **goquery** - HTML解析库
+- **sync** - 并发控制和线程安全
+
+### 前端
+- **Vue 3** - 前端框架
+- **Element Plus** - UI组件库
+- **Vue Router 4** - 路由管理
+- **Axios** - HTTP客户端
+- **Vite** - 构建工具
+
+## 项目结构
+
+```
+tvsubscribe/
+├── cmd/                    # 命令行入口
+│   ├── main.go            # 主程序入口和HTTP服务
+│   └── cli.go             # CLI命令处理逻辑
+├── server/                 # HTTP服务器
+│   └── server.go          # Gin路由和API实现
+├── web/                    # Vue管理界面
+│   ├── src/               # Vue源码
+│   │   ├── views/         # 页面组件
+│   │   ├── components/    # 公共组件
+│   │   └── router/        # 路由配置
+│   ├── dist/              # 构建输出（git忽略）
+│   └── package.json       # 前端依赖
+├── subscribe/              # 订阅管理
+│   └── manager.go         # 订阅管理器实现
+├── config/                 # 配置管理
+│   └── config.go          # 配置管理器实现
+├── interfaces.go           # 核心接口定义
+├── torrentList.go          # 种子查询和解析
+└── downloadTorrent.go      # 种子下载逻辑
+```
+
+## 部署方式
+
+### 1. 单进程部署（推荐）
+```bash
+# 构建
+go build -o tvsubscribe cmd/*.go
+
+# 运行（自动启动Web界面）
+./tvsubscribe
+```
+
+### 2. 开发模式
+```bash
+# 后端服务
+go run cmd/*.go
+
+# 前端开发服务器
+cd web && npm run dev
+```
+
+## 配置文件
+
+### config.json
+```json
+{
+  "endpoint": "https://springsunday.net",
+  "cookie": "your_cookie",
+  "interval_minutes": 60,
+  "wechat_server": "your_wechat_server",
+  "wechat_token": "your_wechat_token",
+  "port": 8443
+}
+```
+
+### subscribes.json
+```json
+[
+  {
+    "douban_id": "36391902",
+    "name": "庆余年 第二季",
+    "resolution": 1
+  }
+]
+```
+
+## API接口
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| GET | /getConfig | 获取配置 |
+| POST | /setConfig | 设置配置 |
+| GET | /getSubscribeList | 获取订阅列表 |
+| POST | /addSubscribe | 添加订阅 |
+| POST | /delSubscribe | 删除订阅 |
+| GET | /health | 健康检查 |
+
+## 使用示例
+
+### Web界面
+1. 访问 http://localhost:8443
+2. 在配置管理页面设置服务器参数
+3. 在订阅管理页面添加/删除订阅
+
+### 命令行
+```bash
+# 查看配置
+./tvsubscribe config --list
+
+# 设置配置
+./tvsubscribe config --set "interval_minutes=30"
+
+# 添加订阅
+./tvsubscribe subscribe --add "douban_id=36391902" "resolution=1"
+```
+
+## 重构效果
+
+### 改进前
+- 简单的ID模式种子处理
+- 基础的配置文件管理
+- 命令行交互界面
+
+### 改进后
+- 完整的TorrentInfo结构化处理
+- HTTP API + Web界面 + CLI三重管理方式
+- 现代化的用户界面
+- 智能名称获取和通知功能
+- 生产级的服务架构
+
+## 后续优化建议
+
+1. **性能优化**
+   - 实现种子信息缓存
+   - 添加并发下载支持
+   - 优化豆瓣API调用频率
+
+2. **功能扩展**
+   - 支持多个PT站点
+   - 添加种子质量筛选
+   - 实现下载历史记录
+
+3. **用户体验**
+   - 添加实时下载进度显示
+   - 支持批量导入订阅
+   - 移动端适配
+
+4. **运维监控**
+   - 添加Prometheus监控指标
+   - 实现日志分级和轮转
+   - 支持Docker容器化部署

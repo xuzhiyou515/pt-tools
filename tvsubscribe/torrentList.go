@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -16,6 +17,7 @@ const (
 
 type TVInfo struct {
 	DouBanID   string `json:"douban_id"`
+	Name       string `json:"name"`
 	Resolution int    `json:"resolution"`
 }
 
@@ -208,5 +210,87 @@ func extractTorrentIDFromURL(url string) string {
 		}
 	}
 	return ""
+}
+
+// GetTVNameByDouBanID 根据豆瓣ID获取电视剧名称
+func GetTVNameByDouBanID(douBanID string) (string, error) {
+	if strings.TrimSpace(douBanID) == "" {
+		return "", fmt.Errorf("豆瓣ID不能为空")
+	}
+
+	// 构建豆瓣API URL
+	url := fmt.Sprintf("https://movie.douban.com/subject/%s/", douBanID)
+
+	// 创建HTTP请求
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("创建请求失败: %v", err)
+	}
+
+	// 设置请求头
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+
+	// 发送请求
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("请求豆瓣失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查HTTP状态码
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("豆瓣API请求失败，状态码: %d", resp.StatusCode)
+	}
+
+	// 读取响应
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("读取豆瓣响应失败: %v", err)
+	}
+
+	// 使用goquery解析HTML
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
+	if err != nil {
+		return "", fmt.Errorf("解析豆瓣HTML失败: %v", err)
+	}
+
+	// 尝试多种方式获取标题
+	var title string
+
+	// 方法1: 从h1标签获取
+	doc.Find("h1 span").Each(func(i int, s *goquery.Selection) {
+		text := strings.TrimSpace(s.Text())
+		if text != "" && title == "" {
+			title = text
+		}
+	})
+
+	// 方法2: 从property="v:itemreviewed"获取
+	if title == "" {
+		doc.Find("[property=v:itemreviewed]").Each(func(i int, s *goquery.Selection) {
+			text := strings.TrimSpace(s.Text())
+			if text != "" {
+				title = text
+			}
+		})
+	}
+
+	// 方法3: 从title标签获取并清理
+	if title == "" {
+		pageTitle := doc.Find("title").Text()
+		if strings.Contains(pageTitle, "豆瓣") {
+			title = strings.TrimSpace(strings.Replace(pageTitle, "(豆瓣)", "", -1))
+			title = strings.TrimSpace(strings.Replace(title, " (豆瓣)", "", -1))
+		}
+	}
+
+	if title == "" {
+		return "", fmt.Errorf("无法从豆瓣页面获取电视剧名称")
+	}
+
+	return title, nil
 }
 

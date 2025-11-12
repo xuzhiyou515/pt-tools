@@ -44,3 +44,19 @@ torrents/
 
 # Build artifacts
 cmd/tvsubscribe.exe
+*/node_modules/*
+
+# Node.js dependencies
+tvsubscribe/web/node_modules/
+node_modules/
+**/node_modules/
+
+# Vue.js build artifacts
+tvsubscribe/web/dist/
+tvsubscribe/web/.temp/
+tvsubscribe/web/cache/
+
+# Go build artifacts
+*.exe
+tvsubscribe/tvsubscribe
+tvsubscribe/tvsubscribe_server

@@ -32,7 +32,7 @@ func handleConfigCommand(args []string) {
 	var setFlag bool
 
 	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
-	configCmd.StringVar(&serverURL, "url", "127.0.0.1:8445", "服务器地址")
+	configCmd.StringVar(&serverURL, "url", "127.0.0.1:8443", "服务器地址")
 	configCmd.BoolVar(&listFlag, "list", false, "获取配置")
 	configCmd.BoolVar(&setFlag, "set", false, "设置配置")
 
@@ -43,7 +43,7 @@ func handleConfigCommand(args []string) {
 		fmt.Println("选项:")
 		fmt.Println("  --list              获取配置")
 		fmt.Println("  --set key=value...  设置配置")
-		fmt.Println("  --url string        服务器地址 (默认 \"127.0.0.1:8444\")")
+		fmt.Println("  --url string        服务器地址 (默认 \"127.0.0.1:8443\")")
 		os.Exit(1)
 	}
 
@@ -132,7 +132,7 @@ func handleSubscribeCommand(args []string) {
 	var delFlag bool
 
 	subscribeCmd := flag.NewFlagSet("subscribe", flag.ExitOnError)
-	subscribeCmd.StringVar(&serverURL, "url", "127.0.0.1:8445", "服务器地址")
+	subscribeCmd.StringVar(&serverURL, "url", "127.0.0.1:8443", "服务器地址")
 	subscribeCmd.BoolVar(&listFlag, "list", false, "获取订阅列表")
 	subscribeCmd.BoolVar(&addFlag, "add", false, "添加订阅")
 	subscribeCmd.BoolVar(&delFlag, "del", false, "删除订阅")
@@ -145,7 +145,7 @@ func handleSubscribeCommand(args []string) {
 		fmt.Println("  --list                          获取订阅列表")
 		fmt.Println("  --add douban_id=xxx...          添加订阅")
 		fmt.Println("  --del douban_id=xxx...          删除订阅")
-		fmt.Println("  --url string                    服务器地址 (默认 \"127.0.0.1:8444\")")
+		fmt.Println("  --url string                    服务器地址 (默认 \"127.0.0.1:8443\")")
 		fmt.Println()
 		fmt.Println("添加/删除订阅的参数格式:")
 		fmt.Println("  douban_id=豆瓣ID (必填)")

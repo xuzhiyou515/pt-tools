@@ -1,104 +1,276 @@
 # TVSubscribe - 电视剧种子自动下载器
 
-一个自动从 SpringSunday 网站查询并下载电视剧种子的工具，支持定时检查和自动添加到 Transmission 下载器。
+一个现代化的电视剧种子自动下载工具，支持从 SpringSunday 网站查询并下载种子，提供完整的Web管理界面和CLI命令行工具。
 
-## 功能特性
+## 🌟 功能特性
 
-- 📺 支持多个电视剧订阅
+### 核心功能
+- 📺 支持多个电视剧订阅管理
 - ⏰ 定时自动检查新种子
-- 🎯 支持不同分辨率 (2160P/1080P)
-- 📥 自动下载并添加到 Transmission
-- ⚙️ 配置文件驱动，易于管理
-- 🔄 配置文件热重载，修改后自动生效
+- 🎯 支持不同分辨率选择 (2160P/1080P)
+- 📥 自动下载种子文件
+- 🌐 **内置Web管理界面** - 基于Vue 3 + Element Plus的现代化管理界面
+- 🖥️ **CLI命令行工具** - 完整的命令行管理功能
 
-## 配置说明
+### 智能功能
+- 🤖 **自动获取电视剧名称** - 根据豆瓣ID自动获取中文名称
+- 📧 **微信通知** - 支持微信消息推送通知
+- 🔄 **配置热重载** - 修改配置后自动生效
+- 📊 **实时状态监控** - HTTP API提供完整的状态信息
 
-### 配置文件 (config.json)
+### 管理方式
+- 🌐 **Web界面管理** - 通过浏览器访问 http://localhost:8443
+- 💻 **命令行管理** - 支持配置管理和订阅管理的完整CLI
+- 🔧 **API接口** - RESTful API支持第三方集成
+
+## 🚀 快速开始
+
+### 1. 直接使用（推荐）
+
+最简单的方式是直接下载编译好的二进制文件：
+
+```bash
+# 下载并运行
+./tvsubscribe
+
+# 访问Web管理界面
+open http://localhost:8443
+```
+
+### 2. 从源码构建
+
+```bash
+# 克隆项目
+git clone https://github.com/your-repo/pt-tools.git
+cd pt-tools/tvsubscribe
+
+# 构建二进制文件
+go build -o tvsubscribe cmd/*.go
+
+# 运行程序
+./tvsubscribe
+```
+
+## ⚙️ 配置说明
+
+### Web界面配置
+
+启动程序后，访问 http://localhost:8443 进入Web管理界面，可以：
+
+- 🎛️ 管理服务器配置
+- 📝 添加/删除订阅
+- 📊 查看实时状态
+- ⚙️ 调整系统参数
+
+### 配置文件结构
+
+程序支持以下配置选项：
 
 ```json
 {
-  "endpoint": "http://username:password@host:port/transmission/rpc",
+  "endpoint": "https://springsunday.net",
   "cookie": "your_springsunday_cookie",
-  "passkey": "your_springsunday_passkey",
   "interval_minutes": 60,
-  "subscribes": [
-    {
-      "douban_id": "36391902",
-      "resolution": 0
-    },
-    {
-      "douban_id": "26798436",
-      "resolution": 1
-    }
-  ]
+  "wechat_server": "your_wechat_server_url",
+  "wechat_token": "your_wechat_token",
+  "port": 8443
 }
 ```
 
 ### 配置字段说明
 
-- `endpoint`: Transmission RPC 地址
+- `endpoint`: SpringSunday 网站地址
 - `cookie`: SpringSunday 网站的登录 Cookie
-- `passkey`: SpringSunday 网站的 Passkey
 - `interval_minutes`: 检查间隔（分钟），默认 60 分钟
-- `subscribes`: 订阅的电视剧列表
-  - `douban_id`: 豆瓣ID
-  - `resolution`: 分辨率 (0=2160P, 1=1080P)
+- `wechat_server`: 微信通知服务器地址（可选）
+- `wechat_token`: 微信通知Token（可选）
+- `port`: HTTP服务监听端口，默认 8443
 
-## 使用方法
+### 订阅数据结构
 
-1. 编辑 `config.json` 文件，填入你的配置信息
-2. 运行程序：
+订阅信息独立存储在 `subscribes.json` 文件中：
+
+```json
+[
+  {
+    "douban_id": "36391902",
+    "name": "庆余年 第二季",
+    "resolution": 1
+  },
+  {
+    "douban_id": "26798436",
+    "name": "琅琊榜",
+    "resolution": 0
+  }
+]
+```
+
+- `douban_id`: 豆瓣电视剧ID
+- `name`: 电视剧名称（自动获取）
+- `resolution`: 分辨率 (0=2160P, 1=1080P)
+
+## 🖥️ 使用方法
+
+### Web界面管理（推荐）
+
+1. 启动程序：
    ```bash
-   cd cmd
-   go build -o tvsubscribe.exe
-   ./tvsubscribe.exe
+   ./tvsubscribe
    ```
 
-## 运行模式
+2. 访问管理界面：
+   ```
+   http://localhost:8443
+   ```
+
+3. 在Web界面中：
+   - 📋 查看和管理订阅列表
+   - ⚙️ 配置服务器参数
+   - 📊 监控下载状态
+   - 🔄 实时更新配置
+
+### 命令行管理
+
+```bash
+# 查看配置
+./tvsubscribe config --list
+
+# 设置配置
+./tvsubscribe config --set "endpoint=https://springsunday.net" "interval_minutes=30"
+
+# 查看订阅
+./tvsubscribe subscribe --list
+
+# 添加订阅
+./tvsubscribe subscribe --add "douban_id=36391902" "resolution=1"
+
+# 删除订阅
+./tvsubscribe subscribe --del "douban_id=36391902" "resolution=1"
+```
+
+### API接口
+
+程序提供完整的RESTful API：
+
+```bash
+# 获取配置
+curl http://localhost:8443/getConfig
+
+# 设置配置
+curl -X POST http://localhost:8443/setConfig \
+  -H "Content-Type: application/json" \
+  -d '{"interval_minutes": 30}'
+
+# 获取订阅列表
+curl http://localhost:8443/getSubscribeList
+
+# 添加订阅
+curl -X POST http://localhost:8443/addSubscribe \
+  -H "Content-Type: application/json" \
+  -d '{"douban_id": "36391902", "resolution": 1}'
+```
+
+## 🏗️ 运行模式
 
 程序启动后会：
-1. 立即执行一次所有订阅的检查
-2. 然后按照配置的间隔定时执行
-3. 启动配置文件监视，支持热重载
-4. 每次执行会：
-   - 查询每个订阅的种子列表
-   - 下载新种子到 `torrents/` 目录
-   - 自动添加到 Transmission 下载
 
-## 热重载功能
+1. **🌐 启动Web服务器** - 在指定端口提供HTTP服务
+2. **🔍 立即检查** - 执行一次所有订阅的种子查询
+3. **⏰ 定时任务** - 按配置间隔自动检查
+4. **📡 微信通知** - 新种子下载成功/失败时发送通知
+5. **🔄 配置监听** - 支持Web界面的实时配置更新
 
-程序支持配置文件热重载，修改 `config.json` 文件后会自动重新加载配置并立即执行：
+## 🔧 高级配置
 
-- ✅ 添加新的电视剧订阅 - 立即检查新订阅的种子
-- ✅ 修改检查间隔时间 - 下一次定时任务使用新的间隔
-- ✅ 更新 Cookie 或 Passkey - 立即使用新的认证信息
-- ✅ 修改 Transmission 端点 - 立即使用新的下载端点
+### 微信通知配置
 
-修改配置文件后，程序会：
-1. 立即重新加载配置
-2. 立即重新处理所有订阅的电视剧
-3. 下一次定时任务使用新的配置
+配置微信服务器后，系统会在以下情况发送通知：
 
-## 日志输出
+- ✅ 新种子下载成功
+- ❌ 种子下载失败
+- ⚠️ 系统错误警告
 
-程序会输出详细的日志信息，包括：
-- 配置加载状态
-- 每个订阅的处理进度
-- 找到的种子数量
-- 下载成功/失败信息
-- 配置文件重载状态
-- 程序启动和退出信息
+```json
+{
+  "wechat_server": "https://your-wechat-bot.com/webhook",
+  "wechat_token": "your_secret_token"
+}
+```
 
-## 程序控制
+### 获取Cookie
 
-- **启动** - 程序启动后立即执行一次所有订阅检查
-- **运行** - 按配置间隔定时执行，同时监控配置文件变化
-- **退出** - 按 `Ctrl+C` 发送 SIGINT 信号优雅退出
+1. 登录 SpringSunday 网站
+2. 打开浏览器开发者工具 (F12)
+3. 刷新页面，在Network标签中找到请求
+4. 复制请求头中的 `Cookie` 值
 
-## 注意事项
+### 获取豆瓣ID
 
-- 确保配置文件中包含有效的 Cookie 和 Passkey
-- 确保 Transmission 服务正常运行
-- 种子文件会保存在 `torrents/` 目录下
-- 已存在的种子文件会自动跳过下载
-- 使用 `Ctrl+C` 优雅退出，避免强制终止
+1. 访问豆瓣电视剧页面
+2. 从URL中获取ID，如：`https://movie.douban.com/subject/36391902/`
+3. 豆瓣ID就是 `36391902`
+
+## 📊 项目架构
+
+```
+tvsubscribe/
+├── cmd/                    # 命令行入口
+│   ├── main.go            # 主程序入口
+│   └── cli.go             # CLI命令处理
+├── server/                 # HTTP服务器
+│   └── server.go          # Gin路由和API
+├── web/                    # Web管理界面
+│   ├── src/               # Vue.js源码
+│   ├── dist/              # 构建输出
+│   └── package.json       # 前端依赖
+├── subscribe/              # 订阅管理
+│   └── manager.go         # 订阅管理器
+├── config/                 # 配置管理
+│   └── config.go          # 配置管理器
+├── torrentList.go          # 种子查询逻辑
+├── downloadTorrent.go      # 种子下载逻辑
+└── interfaces.go           # 接口定义
+```
+
+## 🛠️ 开发说明
+
+### 环境要求
+
+- Go 1.19+
+- Node.js 16+ (开发Web界面时)
+
+### 开发Web界面
+
+```bash
+cd web
+npm install
+npm run dev      # 开发服务器
+npm run build    # 构建生产版本
+```
+
+### 编译项目
+
+```bash
+# 编译主程序
+go build -o tvsubscribe cmd/*.go
+
+# 交叉编译
+GOOS=linux GOARCH=amd64 go build -o tvsubscribe-linux cmd/*.go
+GOOS=windows GOARCH=amd64 go build -o tvsubscribe.exe cmd/*.go
+```
+
+## 📝 注意事项
+
+- 确保 SpringSunday Cookie 有效且未过期
+- 程序会自动创建 `config.json` 和 `subscribes.json` 文件
+- 种子文件默认保存在 `torrents/` 目录下
+- 支持配置热重载，无需重启程序
+- 使用 `Ctrl+C` 优雅退出程序
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request 来完善这个项目！
+
+## 📄 许可证
+
+MIT License

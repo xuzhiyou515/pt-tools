@@ -45,6 +45,30 @@ func NewServer(configManager interfaces.ConfigManager, subscribeManager interfac
 
 // setupRoutes 设置路由
 func (s *Server) setupRoutes() {
+	// 静态文件服务 - 如果存在构建文件则提供Web界面
+	s.engine.Static("/assets", "./web/dist/assets")
+	s.engine.StaticFile("/", "./web/dist/index.html")
+
+	// 处理SPA路由 - 所有未匹配的路由都返回index.html
+	s.engine.NoRoute(func(c *gin.Context) {
+		// 如果是API请求，返回404
+		path := c.Request.URL.Path
+		if path == "/getConfig" ||
+		   path == "/setConfig" ||
+		   path == "/getSubscribeList" ||
+		   path == "/addSubscribe" ||
+		   path == "/delSubscribe" ||
+		   path == "/health" {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "API接口不存在",
+			})
+			return
+		}
+		// 对于其他路径，返回index.html以支持Vue Router
+		c.File("./web/dist/index.html")
+	})
+
 	// 配置相关API
 	s.engine.GET("/getConfig", s.getConfig)
 	s.engine.POST("/setConfig", s.setConfig)
