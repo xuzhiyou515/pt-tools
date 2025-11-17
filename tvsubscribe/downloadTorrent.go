@@ -22,6 +22,7 @@ type WeChatMessageRequest struct {
 	Token   string `json:"token"`
 	Title   string `json:"title"`
 	Content string `json:"content"`
+	Detail  string `json:"detail,omitempty"`
 }
 
 // WeChatMessageResponse 微信消息发送响应
@@ -32,7 +33,7 @@ type WeChatMessageResponse struct {
 }
 
 // sendWeChatMessage 发送微信消息
-func sendWeChatMessage(serverURL, token, title, content string) error {
+func sendWeChatMessage(serverURL, token, title, content, detail string) error {
 	if serverURL == "" || token == "" {
 		return fmt.Errorf("微信服务器配置不完整，跳过消息发送")
 	}
@@ -41,6 +42,7 @@ func sendWeChatMessage(serverURL, token, title, content string) error {
 		Token:   token,
 		Title:   title,
 		Content: content,
+		Detail:  detail,
 	}
 
 	jsonData, err := json.Marshal(request)
@@ -136,15 +138,18 @@ func downloadATorrentFromInfo(torrentInfo *TorrentInfo, path, endpoint, wechatSe
 		// 删除可能已创建的不完整文件
 		os.Remove(path)
 		// 发送下载失败通知
-		infoMsg := fmt.Sprintf("种子ID: %s", torrentInfo.ID)
+		var detailMsg string
 		if torrentInfo.Info != "" {
-			infoMsg += fmt.Sprintf("\n种子信息: %s", torrentInfo.Info)
+			detailMsg = fmt.Sprintf("种子ID: %s\n种子信息: %s", torrentInfo.ID, torrentInfo.Info)
+		} else {
+			detailMsg = fmt.Sprintf("种子ID: %s", torrentInfo.ID)
 		}
 		if torrentInfo.Volume != "" {
-			infoMsg += fmt.Sprintf("\n种子大小: %s", torrentInfo.Volume)
+			detailMsg += fmt.Sprintf("\n种子大小: %s", torrentInfo.Volume)
 		}
+		detailMsg += fmt.Sprintf("\n错误信息: %v", err)
 		if sendErr := sendWeChatMessage(wechatServer, wechatToken,
-			"种子下载失败", fmt.Sprintf("%s\n错误信息: %v", infoMsg, err)); sendErr != nil {
+			"种子下载失败", "下载失败，请检查详情", detailMsg); sendErr != nil {
 			fmt.Printf("发送下载失败通知失败: %v\n", sendErr)
 		}
 		return fmt.Errorf("下载种子文件失败: %v", err)
@@ -156,30 +161,36 @@ func downloadATorrentFromInfo(torrentInfo *TorrentInfo, path, endpoint, wechatSe
 		// 删除种子文件
 		os.Remove(path)
 		// 发送添加失败通知
-		infoMsg := fmt.Sprintf("种子ID: %s", torrentInfo.ID)
+		var detailMsg string
 		if torrentInfo.Info != "" {
-			infoMsg += fmt.Sprintf("\n种子信息: %s", torrentInfo.Info)
+			detailMsg = fmt.Sprintf("种子ID: %s\n种子信息: %s", torrentInfo.ID, torrentInfo.Info)
+		} else {
+			detailMsg = fmt.Sprintf("种子ID: %s", torrentInfo.ID)
 		}
 		if torrentInfo.Volume != "" {
-			infoMsg += fmt.Sprintf("\n种子大小: %s", torrentInfo.Volume)
+			detailMsg += fmt.Sprintf("\n种子大小: %s", torrentInfo.Volume)
 		}
+		detailMsg += fmt.Sprintf("\n错误信息: %v", err)
 		if sendErr := sendWeChatMessage(wechatServer, wechatToken,
-			"添加种子失败", fmt.Sprintf("%s\n错误信息: %v", infoMsg, err)); sendErr != nil {
+			"添加种子失败", "添加失败，请检查详情", detailMsg); sendErr != nil {
 			fmt.Printf("发送添加失败通知失败: %v\n", sendErr)
 		}
 		return fmt.Errorf("添加种子到 Transmission 失败: %v", err)
 	}
 
 	// 发送成功通知，包含更丰富的信息
-	infoMsg := fmt.Sprintf("种子ID: %s", torrentInfo.ID)
+	var detailMsg string
 	if torrentInfo.Info != "" {
-		infoMsg += fmt.Sprintf("\n种子信息: %s", torrentInfo.Info)
+		detailMsg = fmt.Sprintf("种子ID: %s\n种子信息: %s", torrentInfo.ID, torrentInfo.Info)
+	} else {
+		detailMsg = fmt.Sprintf("种子ID: %s", torrentInfo.ID)
 	}
 	if torrentInfo.Volume != "" {
-		infoMsg += fmt.Sprintf("\n种子大小: %s", torrentInfo.Volume)
+		detailMsg += fmt.Sprintf("\n种子大小: %s", torrentInfo.Volume)
 	}
+	detailMsg += fmt.Sprintf("\n种子名称: %s\n已成功添加到 Transmission", *torrent.Name)
 	if err := sendWeChatMessage(wechatServer, wechatToken,
-		"种子下载成功", fmt.Sprintf("%s\n种子名称: %s\n已成功添加到 Transmission", infoMsg, *torrent.Name)); err != nil {
+		"种子下载成功", "下载成功并已添加", detailMsg); err != nil {
 		fmt.Printf("发送成功通知失败: %v\n", err)
 	}
 
